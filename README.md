@@ -1,12 +1,15 @@
 # UnitySCAD
 
-Import parametric **OpenSCAD** (`.scad`) files as Unity meshes, with live parameter editing.
+Import parametric **OpenSCAD** (`.scad`) files as Unity meshes, with live parameter editing and a Shader-Graph-style node editor.
+
+![Live Preview window editing a parametric car](Documentation~/images/live-preview-car.jpg)
 
 ## Features
 
 - **ScriptedImporter** for `.scad` files — drop into `Assets/`, get a ready-to-use prefab
 - **Customizer-style parameter parsing** — `// [min:max]` ranges, `// [option, option]` dropdowns, hex colors, RGB vectors, booleans, descriptions, groups
 - **Live Preview window** — embedded 3D viewport with orbit controls, debounced background recompile, process cancellation on every edit
+- **Node graph editor** (`.scadgraph`) — visual authoring with ~25 typed nodes (primitives, transforms, boolean ops, extrusions, math, vectors); reverse-imports existing `.scad` files into an editable graph
 - **Per-color submeshes** — separates geometry by `color()` calls into tinted submesh materials
 - **Compile cache** — SHA-256-keyed disk cache, re-opening a prior parameter state is instant
 - **OpenSCAD auto-installer** — downloads the 2025.06.22 snapshot (with the fast Manifold CSG backend) into a per-user cache; no manual PATH setup
@@ -103,6 +106,29 @@ wall = [0.55, 0.38, 0.24];
 ```
 
 Only the top-level variables **before the first `module` / `function`** are treated as parameters (matches OpenSCAD Customizer semantics). Expressions like `computed = a + b;` are filtered out.
+
+## Node graph (`.scadgraph`)
+
+Visual, Shader-Graph-style authoring for OpenSCAD geometry. Create with **Assets → Create → SCAD → Graph**; double-click to open in the editor window.
+
+![Full node graph produced by reverse-importing a 300-line .scad file](Documentation~/images/node-graph-car.jpg)
+
+- Search menu (Space or right-click) is auto-populated by reflecting `[ScadNode]` attributes; ~25 typed nodes covering primitives (cube/sphere/cylinder/square/circle/polygon/polyhedron/text), transforms (translate/rotate/scale/mirror/color/offset/resize), boolean ops (union/difference/intersection/hull/minkowski), extrusion (linear_extrude/rotate_extrude/projection), math, and vector ops.
+- Ports are typed: Number / Vector2 / Vector3 / Boolean / String / Color / Solid / Shape / Any, with `Number → Vector` broadcast for SCAD-style shortcuts. Compatible ports auto-connect.
+- Exposed graph parameters emit as SCAD top-level variables, so they're live-editable both in the graph and downstream.
+
+### SCAD source import
+
+The **Import** dropdown in the toolbar pastes SCAD source or opens a `.scad` file and produces a fully expanded graph. Right-clicking a `.scad` asset in the Project window gives the same entry point via **SCAD → Convert .scad to Graph**.
+
+How it works:
+
+1. A preprocessor extracts every `module`/`function` definition into the graph's preamble (preserved verbatim, so OpenSCAD always sees them) and also re-parses each body into AST.
+2. The main parser handles the remaining top-level code — assignments, module calls, SCAD range literals `[start:step:end]`, arithmetic expressions.
+3. The graph builder inlines user-defined module calls with full argument/local-variable substitution, unrolls `for`-loops over constant ranges, and wires identifier references back to `ParameterNode`s so live edits stay wired through.
+4. Anything outside the supported subset (`if`/`else`, non-constant ranges, unknown modules without parsed AST) falls back to `CustomStatementNode` with the SCAD text preserved — the graph always compiles.
+
+See [Documentation~/NodeGraph.md](Documentation~/NodeGraph.md) for the full architectural reference.
 
 ## Performance
 
