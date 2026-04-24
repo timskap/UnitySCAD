@@ -23,7 +23,7 @@ namespace SCADPlugin.Editor
         public static void Open()
         {
             var w = GetWindow<ScadLivePreviewWindow>("SCAD Live Preview");
-            w.minSize = new Vector2(360, 520);
+            w.minSize = new Vector2(420, 260);
         }
 
         [SerializeField] bool useInlineCode = false;
@@ -68,7 +68,8 @@ namespace SCADPlugin.Editor
         IMGUIContainer _preview;
         Label _previewHint;
         Label _previewInfoLabel;
-        Foldout _paramsFoldout;
+        ScrollView _mainScroll;
+        VisualElement _mainSplitContainer;
         Label _paramsCountLabel;
         ToolbarSearchField _paramsSearchField;
         ScrollView _paramsScroll;
@@ -160,11 +161,22 @@ namespace SCADPlugin.Editor
             ApplyRootStyle(root);
             ApplySharedStyles(root);
 
-            BuildHeader(root);
-            BuildSourceAndPreviewSplit(root);
-            BuildCompileSettings(root);
-            BuildParametersSection(root);
-            BuildActionsBar(root);
+            _mainScroll = new ScrollView(ScrollViewMode.Vertical);
+            _mainScroll.style.flexGrow = 1;
+            _mainScroll.style.flexShrink = 1;
+            _mainScroll.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            _mainScroll.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            _mainScroll.contentContainer.style.flexDirection = FlexDirection.Column;
+            _mainScroll.contentViewport.RegisterCallback<GeometryChangedEvent>(_ => UpdateMainSplitHeight());
+            _mainScroll.contentContainer.RegisterCallback<GeometryChangedEvent>(_ => UpdateMainSplitHeight());
+            root.Add(_mainScroll);
+
+            var content = _mainScroll.contentContainer;
+
+            BuildHeader(content);
+            BuildMainSplit(content);
+            BuildCompileSettings(content);
+            BuildActionsBar(content);
             BuildStatusBar(root);
 
             RefreshSourceSlot();
@@ -221,28 +233,63 @@ namespace SCADPlugin.Editor
             root.Add(bar);
         }
 
-        void BuildSourceAndPreviewSplit(VisualElement root)
+        void BuildMainSplit(VisualElement root)
         {
-            var container = new VisualElement();
-            container.style.flexGrow = 1;
-            container.style.minHeight = 260;
-            container.style.marginBottom = 6;
-            container.style.flexShrink = 0;
+            _mainSplitContainer = new VisualElement();
+            _mainSplitContainer.style.height = 480;
+            _mainSplitContainer.style.minHeight = 320;
+            _mainSplitContainer.style.marginBottom = 6;
+            _mainSplitContainer.style.flexShrink = 0;
 
-            var split = new TwoPaneSplitView(
+            var outer = new TwoPaneSplitView(
+                fixedPaneIndex: 1,
+                fixedPaneStartDimension: 280,
+                orientation: TwoPaneSplitViewOrientation.Horizontal)
+            {
+                viewDataKey = "scad-live-preview-main-split",
+            };
+            outer.style.flexGrow = 1;
+
+            var inner = new TwoPaneSplitView(
                 fixedPaneIndex: 0,
-                fixedPaneStartDimension: 160,
+                fixedPaneStartDimension: 140,
                 orientation: TwoPaneSplitViewOrientation.Vertical)
             {
-                viewDataKey = "scad-live-preview-split",
+                viewDataKey = "scad-live-preview-left-split",
             };
-            split.style.flexGrow = 1;
+            inner.style.flexGrow = 1;
+            inner.style.minWidth = 240;
+            inner.Add(CreateSourceCard());
+            inner.Add(CreatePreviewCard());
 
-            split.Add(CreateSourceCard());
-            split.Add(CreatePreviewCard());
+            outer.Add(inner);
+            outer.Add(CreateParametersPane());
 
-            container.Add(split);
-            root.Add(container);
+            _mainSplitContainer.Add(outer);
+            root.Add(_mainSplitContainer);
+        }
+
+        void UpdateMainSplitHeight()
+        {
+            if (_mainSplitContainer == null || _mainScroll == null) return;
+            var parent = _mainSplitContainer.parent;
+            if (parent == null) return;
+
+            float viewportH = _mainScroll.contentViewport.resolvedStyle.height;
+            if (float.IsNaN(viewportH) || viewportH <= 0) return;
+
+            float siblings = 0;
+            foreach (var child in parent.Children())
+            {
+                if (child == _mainSplitContainer) continue;
+                var h = child.resolvedStyle.height;
+                if (!float.IsNaN(h) && h > 0) siblings += h;
+            }
+
+            const float minSplit = 320f;
+            float target = Mathf.Max(minSplit, viewportH - siblings - 8f);
+            if (Mathf.Abs(_mainSplitContainer.resolvedStyle.height - target) < 0.5f) return;
+            _mainSplitContainer.style.height = target;
         }
 
         VisualElement CreateSourceCard()
@@ -477,19 +524,33 @@ namespace SCADPlugin.Editor
             root.Add(foldout);
         }
 
-        void BuildParametersSection(VisualElement root)
+        VisualElement CreateParametersPane()
         {
-            _paramsFoldout = new Foldout { text = "Parameters", value = true };
-            _paramsFoldout.style.marginBottom = 6;
+            var pane = new VisualElement();
+            pane.style.flexGrow = 1;
+            pane.style.flexShrink = 1;
+            pane.style.minWidth = 220;
+            pane.style.paddingLeft = 6;
+            pane.style.paddingRight = 2;
+            pane.style.flexDirection = FlexDirection.Column;
+
+            var title = new Label("Parameters");
+            title.style.unityFontStyleAndWeight = FontStyle.Bold;
+            title.style.fontSize = 12;
+            title.style.marginBottom = 4;
+            title.style.flexShrink = 0;
+            pane.Add(title);
 
             var headerRow = new VisualElement();
             headerRow.style.flexDirection = FlexDirection.Row;
             headerRow.style.alignItems = Align.Center;
             headerRow.style.marginBottom = 4;
+            headerRow.style.flexShrink = 0;
 
             _paramsCountLabel = new Label("0");
             _paramsCountLabel.style.color = new Color(0.72f, 0.72f, 0.76f);
-            _paramsCountLabel.style.marginRight = 8;
+            _paramsCountLabel.style.marginRight = 6;
+            _paramsCountLabel.style.fontSize = 10;
             headerRow.Add(_paramsCountLabel);
 
             _paramsSearchField = new ToolbarSearchField { value = _paramSearch };
@@ -508,48 +569,69 @@ namespace SCADPlugin.Editor
                 RebuildParameterRows();
                 MarkDirty();
             }) { text = "Reset", tooltip = "Reset all parameter values to their defaults" };
-            _resetParamsBtn.style.marginLeft = 6;
+            _resetParamsBtn.style.marginLeft = 4;
             headerRow.Add(_resetParamsBtn);
 
-            _paramsFoldout.Add(headerRow);
+            pane.Add(headerRow);
 
             _paramsEmptyHelp = new HelpBox("Drop a .scad asset above.", HelpBoxMessageType.Info);
             _paramsEmptyHelp.style.marginTop = 2;
-            _paramsFoldout.Add(_paramsEmptyHelp);
+            _paramsEmptyHelp.style.flexShrink = 0;
+            pane.Add(_paramsEmptyHelp);
 
             _paramsScroll = new ScrollView(ScrollViewMode.Vertical);
+            _paramsScroll.style.flexGrow = 1;
             _paramsScroll.style.minHeight = 80;
-            _paramsScroll.style.maxHeight = 260;
-            _paramsFoldout.Add(_paramsScroll);
+            pane.Add(_paramsScroll);
 
-            root.Add(_paramsFoldout);
+            return pane;
         }
 
         void BuildActionsBar(VisualElement root)
         {
             var row = new VisualElement();
             row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.marginTop = 2;
             row.style.marginBottom = 4;
+            row.style.flexShrink = 0;
 
             _compileBtn = new Button(() =>
             {
                 _dirtyAt = 0;
                 StartCompile();
             }) { text = "Compile Now" };
+            StyleActionButton(_compileBtn, primary: true);
             _compileBtn.style.flexGrow = 1;
-            _compileBtn.style.marginRight = 4;
+            _compileBtn.style.flexBasis = 0;
             row.Add(_compileBtn);
 
-            _saveCommitBtn = new Button(OnSaveOrCommit) { text = "Save as .scad…" };
+            _saveCommitBtn = new Button(OnSaveOrCommit) { text = "Save as .scad..." };
+            StyleActionButton(_saveCommitBtn);
             _saveCommitBtn.style.flexGrow = 1;
-            _saveCommitBtn.style.marginRight = 4;
+            _saveCommitBtn.style.flexBasis = 0;
             row.Add(_saveCommitBtn);
 
             _cancelBtn = new Button(CancelActive) { text = "Cancel" };
-            _cancelBtn.style.width = 80;
+            StyleActionButton(_cancelBtn);
+            _cancelBtn.style.minWidth = 84;
+            _cancelBtn.style.marginRight = 0;
             row.Add(_cancelBtn);
 
             root.Add(row);
+        }
+
+        static void StyleActionButton(Button b, bool primary = false)
+        {
+            b.style.height = 26;
+            b.style.marginLeft = 0;
+            b.style.marginRight = 4;
+            b.style.marginTop = 0;
+            b.style.marginBottom = 0;
+            b.style.paddingLeft = 10;
+            b.style.paddingRight = 10;
+            b.style.unityTextAlign = TextAnchor.MiddleCenter;
+            b.style.unityFontStyleAndWeight = primary ? FontStyle.Bold : FontStyle.Normal;
         }
 
         void BuildStatusBar(VisualElement root)
