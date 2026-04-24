@@ -1,0 +1,33 @@
+{
+  "name": "com.timskap.unityscad",
+  "version": "0.1.0",
+  "displayName": "UnitySCAD",
+  "description": "Import parametric .scad files as Unity meshes. Customizer-style parameter parsing, real-time Live Preview window, per-color submeshes, disk-backed compile cache, URP/HDRP/Built-in material compatibility. Requires OpenSCAD (auto-install available).",
+  "unity": "6000.0",
+  "author": {
+    "name": "Timur Abdrakhimov",
+    "email": "timskap@gmail.com",
+    "url": "https://github.com/timskap"
+  },
+  "keywords": [
+    "openscad",
+    "scad",
+    "cad",
+    "parametric",
+    "procedural",
+    "mesh",
+    "import"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/timskap/UnitySCAD.git"
+  },
+  "samples": [
+    {
+      "displayName": "Parametric Box",
+      "description": "Simple .scad exercising all supported Customizer parameter types.",
+      "path": "Samples~"
+    }
+  ]
+}
